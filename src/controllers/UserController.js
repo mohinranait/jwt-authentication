@@ -3,7 +3,10 @@ const User = require("../models/UserModal");
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { productionMode, jwtSecret } = require("../accessEnv");
+const { loginSchema, registerSchema } = require("../utils/userValidation");
+const { successResponse } = require("../utils/responseHandler");
 
+// Create new user
 const createNewUser = async (req, res,next) => {
     try {
         const {name, email, password } = req.body || {};
@@ -12,10 +15,9 @@ const createNewUser = async (req, res,next) => {
 
         // Input validation
         if(!name) throw createError(409, "Name is required")
-        if(!firstName) throw createError(400, "First Name is required")
-        if(!lastName) throw createError(400, "Last Name is required")
-        if(!email) throw createError(400, "Eamil is required")
-        if(!password) throw createError(400, "Password is required")
+        const {error, value} = registerSchema.validate({firstName, lastName, email, password});
+        if(error) throw createError(400, error.details[0].message)
+       
 
        // Duplicate user OR email check
        const isExists = await User.findOne({email});
@@ -31,13 +33,13 @@ const createNewUser = async (req, res,next) => {
     
         if(!user) throw createError(404, "User don't created")
 
-        return res.status(201).send({
-            message: 'User created',
-            success: true,
-            user,
-            hashPassword
+        return successResponse(res, {
+            message: "User created",
+            payload: user,
+            statusCode:201
         })
 
+    
     } catch (error) {
         next(error)
     }
@@ -47,11 +49,12 @@ const createNewUser = async (req, res,next) => {
 const loginUser = async (req, res,next) => {
     try {
         const { email, password } = req.body || {};
+        const {error, value} = loginSchema.validate({email, password});
 
+        if(error) throw createError(400, error.details[0].message )
+        
 
-        if(!email) throw createError(400, "Eamil is required")
-        if(!password) throw createError(400, "Password is required")
-
+    
         // Duplicate user OR email check
         let isExists = await User.findOne({email});
         if(!isExists)  throw createError(404, "not found");
@@ -59,7 +62,7 @@ const loginUser = async (req, res,next) => {
 
         // Match password
         const matchPass = await bcrypt.compare(password, isExists?.password);
-        if(!matchPass) throw createError(401, "forbidden")
+        if(!matchPass) throw createError(401, "Invalid credentials")
 
         // convert to plain object and remove password
         isExists = isExists.toObject();
@@ -82,13 +85,66 @@ const loginUser = async (req, res,next) => {
         })
 
       
-
-        return res.status(200).send({
-            message: 'Login successfully',
-            success: true,
-            user:isExists,
+        return successResponse(res, {
+            message: "Login successfull",
+            payload: isExists,
+            statusCode:200
         })
 
+       
+
+    } catch (error) {
+        next(error)
+    }
+}
+
+
+// Find User
+const findUserById = async (req, res ,next) => {
+    try {
+        let userId = req.params?.id;
+        
+        const {id, email} = req.user;
+        
+        const user = await User.findById(userId).select('-password');
+        if(!user) throw createError(404, "User not-found")
+        
+        return successResponse(res, {
+            statusCode: 200,
+            message: "Success",
+            payload: user,
+        })
+       
+    } catch (error) {
+        next(error)
+    }
+}
+
+// Find authenticated USER
+const getAuthenticatedUser = async (req, res, next) => {
+    try {
+        const {id:userId,email} = req.user;
+        const user = await User.findById(userId).select('-password');
+        if(!user) throw createError(404, "User not-found")
+
+        return successResponse(res, {
+            message: "Success",
+            payload:user,
+            statusCode:200
+        })
+       
+    } catch (error) {
+        next(error)
+    }
+}
+
+// Logout 
+const logoutUser = async (req, res, next) => {
+    try {
+        res.clearCookie('access_token').status(200).json({
+            message: "User logout",
+            success: true,
+        })
     } catch (error) {
         next(error)
     }
@@ -97,5 +153,8 @@ const loginUser = async (req, res,next) => {
 
 module.exports = {
     createNewUser,
-    loginUser 
+    loginUser ,
+    logoutUser,
+    findUserById,
+    getAuthenticatedUser
 }

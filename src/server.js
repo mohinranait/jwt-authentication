@@ -5,6 +5,7 @@ const rateLimit = require("express-rate-limit")
 const createError = require('http-errors');
 const cookieParser = require('cookie-parser');
 const { connectMongodbDatabase } = require('./config/ConnectMongoDB');
+const { errorResponse } = require('./utils/responseHandler');
 
 const app = express();
 
@@ -41,9 +42,11 @@ app.use((req, res, next) => {
 })
 
 app.use((err, req,res, next) => {
-    return res.status(err.status).send({
+    return errorResponse(res, {
         message: err.message,
+        statusCode: err.status
     })
+   
 })
 
 
